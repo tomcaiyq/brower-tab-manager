@@ -5,7 +5,7 @@
   "description": "高效管理浏览器标签页：搜索、分组、收藏、快速切换",
   "permissions": ["tabs", "storage"],
   "action": {
-    "default_popup": "index.html",
+    "default_popup": "popup.html",
     "default_title": "Tab Manager",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -19,7 +19,6 @@
     "128": "icons/icon128.png"
   },
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   }
 }

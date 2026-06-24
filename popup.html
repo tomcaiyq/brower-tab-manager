@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tab Manager</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 侧边栏 -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><path d="M14 14h6v6h-6z"/>
+          </svg>
+        </div>
+        <div class="logo-text">
+          <h1>Tab Manager</h1>
+          <p>标签页管理器</p>
+        </div>
+      </div>
+
+      <nav id="nav">
+        <button class="nav-item active" data-view="all">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>全部标签</span>
+          <span class="nav-count" id="count-all">0</span>
+        </button>
+        <button class="nav-item" data-view="groups">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span>按域名分组</span>
+          <span class="nav-count" id="count-groups">0</span>
+        </button>
+        <button class="nav-item" data-view="favorites">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>收藏夹</span>
+          <span class="nav-count" id="count-favorites">0</span>
+        </button>
+        <button class="nav-item" data-view="recent">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>最近关闭</span>
+          <span class="nav-count" id="count-recent">0</span>
+        </button>
+      </nav>
+
+      <div id="domain-stats" class="domain-stats" style="display:none;">
+        <p class="stats-title">热门域名</p>
+        <div id="domain-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="storage-info">
+          <div class="storage-label">
+            <span>标签总数</span>
+            <span id="total-tabs">0 个</span>
+          </div>
+          <div class="storage-bar"><div class="storage-fill" id="storage-fill"></div></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main id="main">
+      <!-- 搜索栏 -->
+      <div id="search-bar">
+        <div class="search-input-wrap">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="搜索标签页..." autocomplete="off" />
+          <button id="search-clear" class="search-clear" style="display:none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="search-info">
+          <span class="filtered-count"><span id="filtered-count">0</span>/<span id="total-count">0</span></span>
+        </div>
+        <div class="sort-wrap">
+          <button id="sort-btn" class="sort-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5h10M11 9h7M11 13h4M3 17l3 3 3-3M6 20V4"/></svg>
+            <span id="sort-label">最近访问</span>
+          </button>
+          <div id="sort-menu" class="sort-menu" style="display:none;">
+            <button data-sort="recent">最近访问</button>
+            <button data-sort="title">按标题</button>
+            <button data-sort="domain">按域名</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 内容区 -->
+      <div id="content">
+        <div id="tab-list" class="tab-list"></div>
+        <div id="group-list" class="group-list" style="display:none;"></div>
+        <div id="recent-list" class="recent-list" style="display:none;"></div>
+        <div id="empty-state" class="empty-state" style="display:none;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+          <p class="empty-title">暂无标签页</p>
+          <p class="empty-desc">尝试调整搜索条件或视图</p>
+        </div>
+        <div id="loading-state" class="loading-state">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
