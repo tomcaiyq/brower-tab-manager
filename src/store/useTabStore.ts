@@ -1,32 +1,31 @@
 import { create } from 'zustand';
-import type { TabItem, TabGroup, ViewMode, SortMode } from '@/types';
-import { mockTabs, mockGroups, generateRecentlyClosedTabs } from '@/data/mockTabs';
+import type { TabItem, ViewMode, SortMode } from '@/types';
 
 interface TabStore {
   tabs: TabItem[];
-  groups: TabGroup[];
   recentlyClosed: TabItem[];
+  favorites: number[];
   searchQuery: string;
   activeView: ViewMode;
   sortMode: SortMode;
-  selectedTabId?: string;
+  selectedTabId?: number;
+  loading: boolean;
 
   setSearchQuery: (query: string) => void;
   setActiveView: (view: ViewMode) => void;
   setSortMode: (mode: SortMode) => void;
-  setSelectedTab: (id?: string) => void;
+  setSelectedTab: (id?: number) => void;
 
-  activateTab: (id: string) => void;
-  closeTab: (id: string) => void;
-  toggleFavorite: (id: string) => void;
-  togglePin: (id: string) => void;
+  loadTabs: () => Promise<void>;
+  loadRecentlyClosed: () => Promise<void>;
+  loadFavorites: () => Promise<void>;
 
-  restoreTab: (id: string) => void;
-  clearRecentlyClosed: () => void;
+  activateTab: (id: number) => Promise<void>;
+  closeTab: (id: number) => Promise<void>;
+  toggleFavorite: (id: number) => Promise<void>;
 
-  toggleGroupExpand: (groupId: string) => void;
-  addGroup: (name: string, color: string) => void;
-  removeGroup: (groupId: string) => void;
+  restoreTab: (tab: TabItem) => Promise<void>;
+  clearRecentlyClosed: () => Promise<void>;
 
   getFilteredTabs: () => TabItem[];
   getTabsByDomain: () => Record<string, TabItem[]>;
@@ -34,96 +33,169 @@ interface TabStore {
   getDomainStats: () => { domain: string; count: number }[];
 }
 
+function extractDomain(url: string): string {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname.replace('www.', '');
+  } catch {
+    return url;
+  }
+}
+
+function isExtensionContext(): boolean {
+  return typeof chrome !== 'undefined' && !!chrome.tabs;
+}
+
+// 将 chrome.tabs.Tab 转换为 TabItem
+function chromeTabToTabItem(tab: chrome.tabs.Tab): TabItem {
+  return {
+    id: tab.id!,
+    title: tab.title || tab.url || 'Untitled',
+    url: tab.url || '',
+    domain: extractDomain(tab.url || ''),
+    favicon: tab.favIconUrl || '',
+    isActive: tab.active,
+    isPinned: tab.pinned,
+    isFavorite: false,
+    createdAt: 0,
+    lastAccessed: Date.now(),
+  };
+}
+
 export const useTabStore = create<TabStore>((set, get) => ({
-  tabs: mockTabs,
-  groups: mockGroups,
-  recentlyClosed: generateRecentlyClosedTabs(),
+  tabs: [],
+  recentlyClosed: [],
+  favorites: [],
   searchQuery: '',
   activeView: 'all',
   sortMode: 'recent',
   selectedTabId: undefined,
+  loading: true,
 
   setSearchQuery: (query) => set({ searchQuery: query }),
   setActiveView: (view) => set({ activeView: view }),
   setSortMode: (mode) => set({ sortMode: mode }),
   setSelectedTab: (id) => set({ selectedTabId: id }),
 
-  activateTab: (id) =>
-    set((state) => ({
-      tabs: state.tabs.map((tab) => ({
-        ...tab,
-        isActive: tab.id === id,
-        lastAccessed: tab.id === id ? Date.now() : tab.lastAccessed,
-      })),
-      selectedTabId: id,
-    })),
+  loadTabs: async () => {
+    if (!isExtensionContext()) {
+      set({ loading: false });
+      return;
+    }
+    try {
+      const chromeTabs = await chrome.tabs.query({});
+      const result = await chrome.storage.local.get('favorites');
+      const favorites: number[] = (result.favorites as number[]) || [];
+      const tabs = chromeTabs
+        .filter((t) => !t.url?.startsWith('chrome://') && !t.url?.startsWith('chrome-extension://'))
+        .map((t) => {
+          const item = chromeTabToTabItem(t);
+          item.isFavorite = favorites.includes(t.id!);
+          return item;
+        });
+      set({ tabs, loading: false });
+    } catch (error) {
+      console.error('Failed to load tabs:', error);
+      set({ loading: false });
+    }
+  },
 
-  closeTab: (id) =>
-    set((state) => {
-      const tabToClose = state.tabs.find((t) => t.id === id);
-      if (!tabToClose) return state;
-      return {
-        tabs: state.tabs.filter((t) => t.id !== id),
-        recentlyClosed: [
-          { ...tabToClose, lastAccessed: Date.now() },
-          ...state.recentlyClosed.slice(0, 19),
-        ],
-      };
-    }),
+  loadRecentlyClosed: async () => {
+    if (!isExtensionContext()) return;
+    try {
+      const result = await chrome.storage.local.get('recentlyClosed');
+      const recentlyClosed: TabItem[] = (result.recentlyClosed as TabItem[]) || [];
+      set({ recentlyClosed });
+    } catch (error) {
+      console.error('Failed to load recently closed:', error);
+    }
+  },
 
-  toggleFavorite: (id) =>
-    set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.id === id ? { ...tab, isFavorite: !tab.isFavorite } : tab
-      ),
-    })),
+  loadFavorites: async () => {
+    if (!isExtensionContext()) return;
+    try {
+      const result = await chrome.storage.local.get('favorites');
+      const favorites: number[] = (result.favorites as number[]) || [];
+      set({ favorites });
+    } catch (error) {
+      console.error('Failed to load favorites:', error);
+    }
+  },
 
-  togglePin: (id) =>
-    set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.id === id ? { ...tab, isPinned: !tab.isPinned } : tab
-      ),
-    })),
+  activateTab: async (id) => {
+    if (!isExtensionContext()) return;
+    try {
+      await chrome.tabs.update(id, { active: true });
+      // 获取标签所在的窗口并聚焦
+      const tab = await chrome.tabs.get(id);
+      if (tab.windowId) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+      window.close();
+    } catch (error) {
+      console.error('Failed to activate tab:', error);
+    }
+  },
 
-  restoreTab: (id) =>
-    set((state) => {
-      const tabToRestore = state.recentlyClosed.find((t) => t.id === id);
-      if (!tabToRestore) return state;
-      return {
-        recentlyClosed: state.recentlyClosed.filter((t) => t.id !== id),
-        tabs: [{ ...tabToRestore, lastAccessed: Date.now() }, ...state.tabs],
-      };
-    }),
+  closeTab: async (id) => {
+    if (!isExtensionContext()) return;
+    try {
+      await chrome.tabs.remove(id);
+      // 更新本地状态
+      const { tabs } = get();
+      set({ tabs: tabs.filter((t) => t.id !== id) });
+    } catch (error) {
+      console.error('Failed to close tab:', error);
+    }
+  },
 
-  clearRecentlyClosed: () => set({ recentlyClosed: [] }),
+  toggleFavorite: async (id) => {
+    if (!isExtensionContext()) return;
+    try {
+      const result = await chrome.storage.local.get('favorites');
+      const favorites: number[] = (result.favorites as number[]) || [];
+      const newFavorites = favorites.includes(id)
+        ? favorites.filter((f: number) => f !== id)
+        : [...favorites, id];
+      await chrome.storage.local.set({ favorites: newFavorites });
 
-  toggleGroupExpand: (groupId) =>
-    set((state) => ({
-      groups: state.groups.map((g) =>
-        g.id === groupId ? { ...g, isExpanded: !g.isExpanded } : g
-      ),
-    })),
+      // 更新本地状态
+      const { tabs } = get();
+      set({
+        favorites: newFavorites,
+        tabs: tabs.map((t) =>
+          t.id === id ? { ...t, isFavorite: !t.isFavorite } : t
+        ),
+      });
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+    }
+  },
 
-  addGroup: (name, color) =>
-    set((state) => ({
-      groups: [
-        ...state.groups,
-        {
-          id: `group-${Date.now()}`,
-          name,
-          color,
-          isExpanded: true,
-        },
-      ],
-    })),
+  restoreTab: async (tab) => {
+    if (!isExtensionContext()) return;
+    try {
+      await chrome.tabs.create({ url: tab.url, active: true });
+      // 从最近关闭列表中移除
+      const { recentlyClosed } = get();
+      const newRecentlyClosed = recentlyClosed.filter((t) => t.id !== tab.id);
+      await chrome.storage.local.set({ recentlyClosed: newRecentlyClosed });
+      set({ recentlyClosed: newRecentlyClosed });
+      window.close();
+    } catch (error) {
+      console.error('Failed to restore tab:', error);
+    }
+  },
 
-  removeGroup: (groupId) =>
-    set((state) => ({
-      groups: state.groups.filter((g) => g.id !== groupId),
-      tabs: state.tabs.map((t) =>
-        t.groupId === groupId ? { ...t, groupId: undefined } : t
-      ),
-    })),
+  clearRecentlyClosed: async () => {
+    if (!isExtensionContext()) return;
+    try {
+      await chrome.storage.local.set({ recentlyClosed: [] });
+      set({ recentlyClosed: [] });
+    } catch (error) {
+      console.error('Failed to clear recently closed:', error);
+    }
+  },
 
   getFilteredTabs: () => {
     const { tabs, searchQuery, sortMode, activeView } = get();
@@ -163,14 +235,12 @@ export const useTabStore = create<TabStore>((set, get) => ({
     const { getFilteredTabs } = get();
     const tabs = getFilteredTabs();
     const byDomain: Record<string, TabItem[]> = {};
-
     tabs.forEach((tab) => {
       if (!byDomain[tab.domain]) {
         byDomain[tab.domain] = [];
       }
       byDomain[tab.domain].push(tab);
     });
-
     return byDomain;
   },
 

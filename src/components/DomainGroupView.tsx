@@ -19,21 +19,19 @@ export default function DomainGroupView() {
     }));
   };
 
-  const isExpanded = (domain: string) => {
-    return expandedDomains[domain] !== false;
-  };
+  const isExpanded = (domain: string) => expandedDomains[domain] !== false;
 
   if (domains.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-        <Globe2 className="w-16 h-16 mb-4 opacity-30" />
-        <p className="text-lg font-medium">没有找到相关域名</p>
+        <Globe2 className="w-12 h-12 mb-3 opacity-30" />
+        <p className="text-sm font-medium">没有找到相关域名</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {domains.map((domain, domainIndex) => {
         const tabs = tabsByDomain[domain];
         const expanded = isExpanded(domain);
@@ -41,32 +39,32 @@ export default function DomainGroupView() {
         return (
           <div
             key={domain}
-            className="glass-card rounded-2xl overflow-hidden"
+            className="glass-card rounded-xl overflow-hidden"
             style={{
-              animation: `slideUp 0.4s ease-out ${domainIndex * 100}ms both`,
+              animation: `slideUp 0.3s ease-out ${domainIndex * 50}ms both`,
             }}
           >
             <button
               onClick={() => toggleDomain(domain)}
-              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-white/5 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors"
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 flex items-center justify-center">
-                <Globe2 className="w-4 h-4 text-neon-cyan" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-neon-cyan/20 to-neon-purple/20 flex items-center justify-center">
+                <Globe2 className="w-3.5 h-3.5 text-neon-cyan" />
               </div>
-              <div className="flex-1 text-left">
-                <h3 className="text-sm font-semibold text-white">{domain}</h3>
-                <p className="text-xs text-gray-500">{tabs.length} 个标签页</p>
+              <div className="flex-1 text-left min-w-0">
+                <h3 className="text-xs font-semibold text-white truncate">{domain}</h3>
+                <p className="text-[10px] text-gray-500">{tabs.length} 个标签页</p>
               </div>
               <ChevronDown
                 className={cn(
-                  'w-5 h-5 text-gray-400 transition-transform duration-300',
+                  'w-4 h-4 text-gray-400 transition-transform duration-300',
                   expanded ? 'rotate-0' : '-rotate-90'
                 )}
               />
             </button>
 
             {expanded && (
-              <div className="px-5 pb-5 pt-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 animate-fade-in">
+              <div className="px-3 pb-3 pt-0.5 grid grid-cols-2 gap-2 animate-fade-in">
                 {tabs.map((tab, index) => (
                   <TabCard
                     key={tab.id}
